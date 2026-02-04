@@ -6,6 +6,7 @@ const labelPreview = document.querySelector("#label-preview");
 const backToScan = document.querySelector("#back-to-scan");
 const printButton = document.querySelector("#print-button");
 const goUpload = document.querySelector("#go-upload");
+const csvStatus = document.querySelector("#csv-status");
 
 const modal = document.querySelector("#code-modal");
 const codeInput = document.querySelector("#code-input");
@@ -26,15 +27,26 @@ async function lookupBarcode() {
   statusEl.textContent = "מחפש...";
   labelSection.classList.add("hidden");
 
-  try {
-    const response = await fetch(`/api/lookup?barcode=${encodeURIComponent(barcode)}`);
-    const payload = await response.json();
+  const stored = localStorage.getItem("csvData");
+  if (!stored) {
+    statusEl.textContent = "לא נמצא קובץ CSV שמור. יש להעלות קובץ קודם.";
+    return;
+  }
 
-    if (!response.ok) {
-      throw new Error(payload.error || "ברקוד לא נמצא");
+  try {
+    const payload = JSON.parse(stored);
+    const match = payload.rows.find((row) => String(row[0]).trim() === barcode);
+
+    if (!match) {
+      throw new Error("ברקוד לא נמצא בקובץ.");
     }
 
-    renderLabel(payload.data);
+    const data = payload.headers.reduce((acc, header, index) => {
+      acc[header || `עמודה ${index + 1}`] = match[index] ?? "";
+      return acc;
+    }, {});
+
+    renderLabel(data);
     statusEl.textContent = "נמצאו נתונים והמדבקה מוכנה.";
     labelSection.classList.remove("hidden");
   } catch (error) {
@@ -132,3 +144,22 @@ window.addEventListener("appinstalled", () => {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
 }
+
+function updateCsvStatus() {
+  const stored = localStorage.getItem("csvData");
+  if (!stored) {
+    csvStatus.textContent = "אין קובץ CSV שמור במכשיר.";
+    return;
+  }
+
+  try {
+    const payload = JSON.parse(stored);
+    csvStatus.textContent = `קובץ פעיל: ${payload.filename || "ללא שם"} | שורות: ${
+      payload.rows?.length ?? 0
+    }`;
+  } catch (error) {
+    csvStatus.textContent = "לא ניתן לקרוא את הקובץ השמור.";
+  }
+}
+
+updateCsvStatus();
