@@ -90,6 +90,7 @@ printButton.addEventListener("click", () => {
 
 function openModal() {
   modal.classList.remove("hidden");
+  modal.removeAttribute("hidden");
   codeStatus.textContent = "";
   codeInput.value = "";
   codeInput.focus();
@@ -97,6 +98,7 @@ function openModal() {
 
 function closeModal() {
   modal.classList.add("hidden");
+  modal.setAttribute("hidden", "");
 }
 
 goUpload.addEventListener("click", () => {

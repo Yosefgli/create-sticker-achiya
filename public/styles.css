@@ -144,6 +144,10 @@ button:hover:not(:disabled) {
   display: none;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
