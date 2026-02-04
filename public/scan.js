@@ -108,7 +108,7 @@ codeCancel.addEventListener("click", closeModal);
 codeSubmit.addEventListener("click", () => {
   const value = codeInput.value.trim();
   if (value === "770") {
-    window.location.href = "/upload.html";
+    window.location.href = "./upload.html";
     return;
   }
   codeStatus.textContent = "הקוד שגוי. נסה שוב.";
@@ -142,7 +142,7 @@ window.addEventListener("appinstalled", () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js");
+  navigator.serviceWorker.register("./sw.js");
 }
 
 function updateCsvStatus() {

@@ -1,14 +1,14 @@
 const CACHE_NAME = "barcode-label-v1";
 const ASSETS = [
-  "/",
-  "/scan.html",
-  "/upload.html",
-  "/styles.css",
-  "/scan.js",
-  "/csv.js",
-  "/upload.js",
-  "/manifest.json",
-  "/icon.svg"
+  "./",
+  "./scan.html",
+  "./upload.html",
+  "./styles.css",
+  "./scan.js",
+  "./csv.js",
+  "./upload.js",
+  "./manifest.json",
+  "./icon.svg"
 ];
 
 self.addEventListener("install", (event) => {
