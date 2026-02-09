@@ -255,6 +255,7 @@
 
         <button id="searchBtn" class="btnPrimary">חיפוש</button>
         <button id="clearBtn" class="btnGhost">נקה</button>
+        <button id="installBtn" class="btnGhost" style="display:none;">התקן אפליקציה</button>
       </div>
 
       <div id="status" class="status"></div>
@@ -299,6 +300,90 @@
     const labelsGrid   = document.getElementById("labelsGrid");
     const printBtn     = document.getElementById("printBtn");
     const backBtn      = document.getElementById("backBtn");
+
+  // === PWA Install Button ===
+  const installBtn = document.getElementById("installBtn");
+  let deferredInstallPrompt = null;
+
+  function isRunningStandalone(){
+    // Android/Chrome: display-mode
+    const isStandaloneDisplay = window.matchMedia?.("(display-mode: standalone)")?.matches;
+    // iOS Safari:
+    const isIOSStandalone = window.navigator.standalone === true;
+    return !!(isStandaloneDisplay || isIOSStandalone);
+  }
+
+  function isIOS(){
+    // iPhone/iPad Safari זיהוי בסיסי
+    return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
+
+  function isSafari(){
+    // כדי לא להציג על Chrome iOS (שעדיין Safari מנוע, אבל חוויית ההתקנה שונה)
+    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  }
+
+  async function updateInstallButtonVisibility(){
+    // אם כבר מותקן / רץ כ-PWA — אין מה להציג
+    if (isRunningStandalone()){
+      installBtn.style.display = "none";
+      return;
+    }
+
+    // אם יש API שמזהה אפליקציות קשורות מותקנות (לא בכל דפדפן)
+    if (navigator.getInstalledRelatedApps){
+      try{
+        const related = await navigator.getInstalledRelatedApps();
+        if (related && related.length){
+          installBtn.style.display = "none";
+          return;
+        }
+      }catch(e){}
+    }
+
+    // iOS Safari: אין beforeinstallprompt -> מציגים כפתור שמסביר איך להוסיף למסך הבית
+    if (isIOS() && isSafari()){
+      installBtn.style.display = "inline-flex";
+      installBtn.textContent = "הוסף למסך הבית";
+      installBtn.onclick = () => {
+        alert("ב־iPhone: לחץ על כפתור השיתוף (Share) ואז 'הוסף למסך הבית' (Add to Home Screen).");
+      };
+      return;
+    }
+
+    // Android/Chromium: נציג רק אם האירוע beforeinstallprompt תפס
+    // (כלומר: האתר באמת עומד בתנאים)
+    installBtn.style.display = deferredInstallPrompt ? "inline-flex" : "none";
+    if (deferredInstallPrompt){
+      installBtn.textContent = "התקן אפליקציה";
+      installBtn.onclick = async () => {
+        try{
+          deferredInstallPrompt.prompt();
+          const choice = await deferredInstallPrompt.userChoice;
+          deferredInstallPrompt = null;
+          await updateInstallButtonVisibility(); // אחרי ניסיון התקנה נעדכן מצב
+        }catch(e){}
+      };
+    }
+  }
+
+  // Chrome/Edge Android: נתפס רק אם יש תנאים ל-PWA (manifest + https + service worker וכו')
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); // כדי להציג כפתור שלך במקום ה-banner האוטומטי
+    deferredInstallPrompt = e;
+    updateInstallButtonVisibility();
+  });
+
+  // אחרי התקנה
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    updateInstallButtonVisibility();
+  });
+
+  // בעת טעינה
+  window.addEventListener("load", () => {
+    updateInstallButtonVisibility();
+  });
 
     let activeAbortController = null;
 
