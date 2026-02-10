@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Client PDF → Make Webhook</title>
+
+  <!-- 1) html2canvas + jsPDF -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f6f6f6;
+    }
+
+    /* אזור המדבקה שאנחנו “מצלמים” */
+    #label {
+      width: 100mm;
+      height: 100mm;
+      background: white;
+      border: 2px solid #000;
+      box-sizing: border-box;
+      padding: 8mm;
+      display: flex;
+      flex-direction: column;
+      gap: 6mm;
+    }
+
+    #label h1 {
+      margin: 0;
+      font-size: 18pt;
+      line-height: 1.1;
+    }
+
+    #label .row {
+      font-size: 12pt;
+    }
+
+    .controls {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    input {
+      padding: 8px 10px;
+      font-size: 14px;
+      width: 220px;
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="label">
+    <h1>תווית</h1>
+    <div class="row">מוצר: <b id="pName">חלה</b></div>
+    <div class="row">תאריך: <b id="pDate">2026-02-10</b></div>
+    <div class="row">אצווה: <b id="pBatch">000123</b></div>
+  </div>
+
+  <div class="controls">
+    <input id="nameInput" placeholder="שם מוצר" value="חלה" />
+    <input id="dateInput" placeholder="תאריך" value="2026-02-10" />
+    <input id="batchInput" placeholder="אצווה" value="000123" />
+    <button id="btn">Generate & Send to Make</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <script>
+    const MAKE_WEBHOOK_URL = "https://hook.integrator.boost.space/q78rwd42j34fi2nyhj5hguj6xlug3e5q";
+
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
+    }
+
+    function updateLabelFromInputs() {
+      document.getElementById("pName").textContent = document.getElementById("nameInput").value || "";
+      document.getElementById("pDate").textContent = document.getElementById("dateInput").value || "";
+      document.getElementById("pBatch").textContent = document.getElementById("batchInput").value || "";
+    }
+
+    async function generatePdfBase64FromElement(el) {
+      // scale גבוה נותן איכות טובה יותר (אבל יותר כבד)
+      const scale = 3;
+
+      const canvas = await html2canvas(el, {
+        backgroundColor: "#ffffff",
+        scale,
+        useCORS: true
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+
+      // PDF בגודל 100x100mm
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [100, 100]
+      });
+
+      // מכניסים את התמונה כולה בדיוק לגודל העמוד
+      pdf.addImage(imgData, "PNG", 0, 0, 100, 100);
+
+      // מחזיר Base64 בלי prefix
+      const dataUriString = pdf.output("datauristring"); // "data:application/pdf;base64,...."
+      return dataUriString.split(",")[1];
+    }
+
+    async function sendToMake(pdfBase64) {
+      const payload = {
+        fileName: "label-100x100.pdf",
+        mimeType: "application/pdf",
+        fileBase64: pdfBase64,
+        meta: {
+          product: document.getElementById("nameInput").value,
+          date: document.getElementById("dateInput").value,
+          batch: document.getElementById("batchInput").value
+        }
+      };
+
+      const resp = await fetch(MAKE_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Make webhook error: ${resp.status}\n${text}`);
+      }
+
+      return resp.text().catch(() => "");
+    }
+
+    document.getElementById("btn").addEventListener("click", async () => {
+      try {
+        if (!MAKE_WEBHOOK_URL || MAKE_WEBHOOK_URL.includes("PASTE_YOUR")) {
+          setStatus("שים את כתובת ה-Webhook של Make בתוך MAKE_WEBHOOK_URL בקוד.");
+          return;
+        }
+
+        updateLabelFromInputs();
+        setStatus("מייצר PDF...");
+
+        const el = document.getElementById("label");
+        const pdfBase64 = await generatePdfBase64FromElement(el);
+
+        setStatus(`נוצר PDF (${Math.round(pdfBase64.length / 4)} bytes בערך). שולח ל-Make...`);
+        const makeRespText = await sendToMake(pdfBase64);
+
+        setStatus("נשלח ל-Make בהצלחה.\nתגובה:\n" + (makeRespText || "(no body)"));
+      } catch (e) {
+        setStatus("שגיאה:\n" + (e?.message || e));
+      }
+    });
+  </script>
+</body>
+</html>
