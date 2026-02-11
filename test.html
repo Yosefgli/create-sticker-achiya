@@ -10,16 +10,12 @@
 
   <style>
     :root{
-      /* תצוגה של המדבקה */
       --size: 3.98in;
-
       --border-outer: 2px;
       --border-inner: 1.5px;
       --ink: #111;
     }
-
     *{ box-sizing:border-box; }
-
     body{
       margin:0;
       padding:18px;
@@ -27,7 +23,6 @@
       font-family: Arial, "Noto Sans Hebrew", sans-serif;
       color:#000;
     }
-
     .wrap{
       display:flex;
       justify-content:center;
@@ -35,7 +30,6 @@
       gap:16px;
       flex-wrap: wrap;
     }
-
     #label{
       width:var(--size);
       height:var(--size);
@@ -44,21 +38,18 @@
       display:grid;
       grid-template-rows: 0.498fr 0.376fr 0.126fr;
     }
-
     .top{
       display:grid;
       grid-template-columns: 0.339fr 0.661fr;
       border-bottom:var(--border-inner) solid var(--ink);
       min-height:0;
     }
-
     .top-left{
       display:grid;
       grid-template-rows: 0.492fr 0.508fr;
       border-left:var(--border-inner) solid var(--ink);
       min-height:0;
     }
-
     .cell{
       display:flex;
       flex-direction:column;
@@ -69,11 +60,7 @@
       gap:6mm;
       min-height:0;
     }
-
-    .cell + .cell{
-      border-top:var(--border-inner) solid var(--ink);
-    }
-
+    .cell + .cell{ border-top:var(--border-inner) solid var(--ink); }
     .logo-cell{
       display:flex;
       align-items:center;
@@ -87,7 +74,6 @@
       object-fit:contain;
       display:block;
     }
-
     .mid{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -95,7 +81,6 @@
       min-height:0;
     }
     .mid .cell:first-child{ border-left:var(--border-inner) solid var(--ink); }
-
     .bottom{
       display:grid;
       grid-template-columns: 1fr 1fr;
@@ -166,13 +151,11 @@
             <div class="t-small">מספר משימה</div>
             <div class="t-med" id="vTask">22154001</div>
           </div>
-
           <div class="cell">
             <div class="t-med" style="font-size:clamp(18px,4.5vw,30px); font-weight:600;" id="vType">ארגז</div>
             <div class="t-big" id="vBox">3/3</div>
           </div>
         </div>
-
         <div class="logo-cell">
           <img id="logoImg" alt="לוגו" src="logo.png" />
         </div>
@@ -183,7 +166,6 @@
           <div class="t-med">טלפון לקוח:</div>
           <div class="t-med" id="vPhone">0502262235</div>
         </div>
-
         <div class="cell">
           <div class="t-med">כתובת:</div>
           <div class="t-med" id="vStreet">האורן 8</div>
@@ -203,7 +185,6 @@
 
     <div class="panel">
       <h3>עריכת המדבקה</h3>
-
       <div class="grid">
         <label>מספר משימה <input id="iTask" value="22154001" /></label>
         <label>סוג (ארגז/שקית) <input id="iType" value="ארגז" /></label>
@@ -216,7 +197,9 @@
       </div>
 
       <div class="hint">
-        אם עדיין “נשאר בפנים”: תגדיל <b>EXTRA_FEED_INCH</b> ל-0.55. אם מוציא יותר מדי – תוריד ל-0.30.
+        אם יצא מסובב: שנה <b>ROTATE_DEG</b> ב-JS ל-0 / 90 / -90.
+        <br>
+        אם נשאר בפנים: שנה <b>EXTRA_FEED_INCH</b>.
       </div>
 
       <div class="controls">
@@ -232,17 +215,20 @@
   <script>
     const WEBHOOK_URL = "https://hook.integrator.boost.space/q78rwd42j34fi2nyhj5hguj6xlug3e5q";
 
-    // ✅ המדבקה עצמה (כמו בקובץ שעובד)
+    // ✅ כמו הקובץ שלך
     const LABEL_INCH = 3.98;
 
-    // ✅ תוספת הזנה אחרי הדפסה (הטריק לפתור “נשאר בפנים”)
-    const EXTRA_FEED_INCH = 0.45; // ≈ 11.43mm (תשחק 0.30–0.55)
+    // ✅ תוספת הזנה כדי שלא יישאר בפנים
+    const EXTRA_FEED_INCH = 0.45; // 0.30–0.60 לפי הצורך
+
+    // ✅ אם יצא מסובב 90° על הצד — תשנה ל-0 או -90
+    const ROTATE_DEG = 0; // נסה: 0, 90, -90
 
     const INCH_TO_MM = 25.4;
     const LABEL_MM = LABEL_INCH * INCH_TO_MM;
     const EXTRA_FEED_MM = EXTRA_FEED_INCH * INCH_TO_MM;
 
-    const LOGO_DATA_URI = ""; // "data:image/png;base64,..."
+    const LOGO_DATA_URI = "";
 
     function setStatus(msg){ document.getElementById("status").textContent = msg; }
 
@@ -298,7 +284,7 @@
 
       const { jsPDF } = window.jspdf;
 
-      // ✅ הדף גבוה יותר כדי לייצר “עוד הזנה”
+      // ננעל portrait; אנחנו שולטים על הסיבוב בתוך addImage
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
@@ -308,17 +294,38 @@
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
 
-      // ✅ המדבקה עצמה מודבקת למעלה בגודל המדויק
-      pdf.addImage(imgData, "PNG", 0, 0, pageW, LABEL_MM);
+      // ✅ מדביקים את המדבקה למעלה, אבל עם סיבוב לפי ROTATE_DEG
+      // אם ROTATE_DEG הוא 90/-90 צריך לחשב W/H הפוך
+      const rotate = ROTATE_DEG;
+
+      if (rotate === 0) {
+        pdf.addImage(imgData, "PNG", 0, 0, pageW, LABEL_MM, undefined, "FAST", 0);
+      } else if (rotate === 90) {
+        // מסובב ימינה: התמונה "עולה" על X/Y אחרת
+        // כשמסובבים 90°, הרוחב/גובה מתחלפים
+        pdf.addImage(imgData, "PNG",
+          pageW, 0,            // מתחילים בפינה ימנית עליונה
+          LABEL_MM, pageW,     // W/H מוחלפים
+          undefined, "FAST", 90
+        );
+      } else if (rotate === -90) {
+        // מסובב שמאלה
+        pdf.addImage(imgData, "PNG",
+          0, LABEL_MM,         // מתחילים משמאל למטה של אזור המדבקה
+          LABEL_MM, pageW,
+          undefined, "FAST", -90
+        );
+      } else {
+        // כל זווית אחרת (אם תרצה) – jsPDF תומך, אבל פה שמרתי פשוט
+        pdf.addImage(imgData, "PNG", 0, 0, pageW, LABEL_MM, undefined, "FAST", rotate);
+      }
 
       setStatus(
         "נוצר PDF:\n" +
         `• Label (inch): ${LABEL_INCH} × ${LABEL_INCH}\n` +
         `• Extra feed (inch): ${EXTRA_FEED_INCH}\n` +
-        `• Page (mm): ${pageW.toFixed(3)} × ${pageH.toFixed(3)}\n` +
-        `• Label area (mm): ${LABEL_MM.toFixed(3)} × ${LABEL_MM.toFixed(3)}\n` +
-        `• Extra feed (mm): ${EXTRA_FEED_MM.toFixed(3)}\n` +
-        "מחשב Base64..."
+        `• Rotate (deg): ${ROTATE_DEG}\n` +
+        `• Page (mm): ${pageW.toFixed(3)} × ${pageH.toFixed(3)}\n`
       );
 
       const dataUriString = pdf.output("datauristring");
@@ -364,11 +371,11 @@
         bigName: iName.value,
         labelInch: LABEL_INCH,
         extraFeedInch: EXTRA_FEED_INCH,
+        rotateDeg: ROTATE_DEG,
         generatedAt: new Date().toISOString()
       };
     }
 
-    // init
     applyLogo();
     updateLabelFromInputs();
 
@@ -384,9 +391,10 @@
         const pdfBase64 = await generatePdfBase64FromElement(label);
         const fileName = `label-${safeSlug(iTask.value || "task")}.pdf`;
 
-        setStatus(status.textContent + "\n\nשולח לוובהוק...\n" + `Base64 length: ${pdfBase64.length}`);
+        setStatus(status.textContent + "\nשולח לוובהוק...");
         await sendPdfBase64ToWebhookNoCors(pdfBase64, fileName, collectMeta());
-        setStatus(status.textContent + "\n\nנשלח.");
+
+        setStatus(status.textContent + "\nנשלח.");
       }catch(e){
         setStatus("שגיאה:\n" + (e?.message || e));
       }
@@ -401,7 +409,7 @@
         const fileName = `label-${safeSlug(iTask.value || "task")}.pdf`;
 
         downloadBase64Pdf(pdfBase64, fileName);
-        setStatus(status.textContent + `\n\nירד למחשב: ${fileName}`);
+        setStatus(status.textContent + `\nירד למחשב: ${fileName}`);
       }catch(e){
         setStatus("שגיאה:\n" + (e?.message || e));
       }
