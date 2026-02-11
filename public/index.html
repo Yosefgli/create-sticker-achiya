@@ -78,7 +78,7 @@
     }
 
     async function generatePdfBase64FromElement(el) {
-      const scale = 4; // איכות טובה יותר, קובץ גדול יותר
+      const scale = 1.5; // איכות טובה יותר, קובץ גדול יותר
       const canvas = await html2canvas(el, {
         backgroundColor: "#ffffff",
         scale,
