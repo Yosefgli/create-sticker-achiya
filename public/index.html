@@ -3,73 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Generate PDF (Client) + Download</title>
+  <title>Generate PDF (Client) → Send Base64 to Webhook</title>
 
   <!-- Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f6f6f6;
-    }
-
-    /* אזור המדבקה */
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f6f6f6; }
     #label {
-      width: 100mm;
-      height: 100mm;
-      background: #fff;
-      border: 2px solid #000;
-      box-sizing: border-box;
-      padding: 8mm;
-      display: flex;
-      flex-direction: column;
-      gap: 6mm;
+      width: 100mm; height: 100mm; background: #fff; border: 2px solid #000;
+      box-sizing: border-box; padding: 8mm; display: flex; flex-direction: column; gap: 6mm;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
+    #label h1 { margin: 0; font-size: 18pt; line-height: 1.1; }
+    #label .row { font-size: 12pt; }
 
-    #label h1 {
-      margin: 0;
-      font-size: 18pt;
-      line-height: 1.1;
-    }
-
-    #label .row {
-      font-size: 12pt;
-    }
-
-    .controls {
-      margin-top: 16px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    button {
-      padding: 10px 14px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    input {
-      padding: 8px 10px;
-      font-size: 14px;
-      width: 220px;
-    }
-
-    .status {
-      margin-top: 12px;
-      font-size: 14px;
-      white-space: pre-wrap;
-    }
-
-    /* כדי שהצילום יהיה חד ונקי */
-    #label {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+    .controls { margin-top: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button { padding: 10px 14px; font-size: 14px; cursor: pointer; }
+    input { padding: 8px 10px; font-size: 14px; width: 220px; }
+    .status { margin-top: 12px; font-size: 14px; white-space: pre-wrap; }
+    .hint { font-size: 12px; color: #333; margin-top: 8px; max-width: 900px; line-height: 1.4; }
+    code { background: #eee; padding: 2px 6px; border-radius: 6px; }
   </style>
 </head>
 
@@ -85,12 +40,25 @@
     <input id="nameInput" placeholder="שם מוצר" value="חלה" />
     <input id="dateInput" placeholder="תאריך" value="2026-02-10" />
     <input id="batchInput" placeholder="אצווה" value="000123" />
-    <button id="btnDownload">צור PDF והורד</button>
+    <button id="btnSend">צור PDF ושלח לוובהוק</button>
+    <button id="btnDownload" type="button">צור PDF והורד (בדיקה)</button>
+  </div>
+
+  <div class="hint">
+    שים לב: שליחה ישירה מהדפדפן לוובהוק בדומיין אחר יכולה להיחסם ע"י CORS.
+    בקוד הזה יש 2 מצבים:
+    <br>1) <b>Send (no-cors)</b> — שולח בלי לקבל תשובה (כמו שביקשת).
+    <br>2) Download — לוודא שה-PDF נוצר תקין.
+    <br><br>
+    החלף את <code>WEBHOOK_URL</code> לכתובת הוובהוק שלך.
   </div>
 
   <div class="status" id="status"></div>
 
   <script>
+    // ✅ החלף לכתובת ה-webhook שלך (Make / Boost / וכו')
+    const WEBHOOK_URL = "https://hook.integrator.boost.space/q78rwd42j34fi2nyhj5hguj6xlug3e5q";
+
     function setStatus(msg) {
       document.getElementById("status").textContent = msg;
     }
@@ -101,10 +69,16 @@
       document.getElementById("pBatch").textContent = document.getElementById("batchInput").value || "";
     }
 
-    async function generatePdfBlobFromElement(el) {
-      // scale גבוה = איכות טובה יותר (גם קובץ יותר גדול)
-      const scale = 4;
+    function safeSlug(s) {
+      return (s || "")
+        .trim()
+        .replace(/[^\w\u0590-\u05FF\- ]+/g, "")
+        .replace(/\s+/g, "-")
+        .slice(0, 50) || "label";
+    }
 
+    async function generatePdfBase64FromElement(el) {
+      const scale = 4; // איכות טובה יותר, קובץ גדול יותר
       const canvas = await html2canvas(el, {
         backgroundColor: "#ffffff",
         scale,
@@ -114,22 +88,48 @@
       const imgData = canvas.toDataURL("image/png");
 
       const { jsPDF } = window.jspdf;
-
-      // PDF בגודל 100x100mm (10x10 ס"מ)
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
-        format: [100, 100]
+        format: [100, 100] // 10x10 ס"מ
       });
 
-      // מכניסים תמונה בדיוק לגודל העמוד
       pdf.addImage(imgData, "PNG", 0, 0, 100, 100);
 
-      // Blob להורדה
-      return pdf.output("blob");
+      // data:application/pdf;base64,....
+      const dataUriString = pdf.output("datauristring");
+      // מחזיר רק Base64 (בלי prefix)
+      return dataUriString.split(",")[1];
     }
 
-    function downloadBlob(blob, filename) {
+    async function sendPdfBase64ToWebhookNoCors(pdfBase64, fileName, meta) {
+      // שולחים כ- text/plain כדי להימנע מ-preflight בהרבה מקרים
+      // no-cors => לא נקבל תשובה אמיתית, ולא נדע בוודאות אם הגיע - צריך לבדוק בצד Make.
+      const payload = {
+        fileName,
+        mimeType: "application/pdf",
+        pdfBase64,  // ✅ זה מה שביקשת
+        meta
+      };
+
+      await fetch(WEBHOOK_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain;charset=UTF-8"
+        },
+        body: JSON.stringify(payload)
+      });
+    }
+
+    function downloadBase64Pdf(pdfBase64, filename) {
+      // ממירים Base64 ל-Blob ומורידים
+      const byteChars = atob(pdfBase64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -140,23 +140,60 @@
       URL.revokeObjectURL(url);
     }
 
-    document.getElementById("btnDownload").addEventListener("click", async () => {
+    document.getElementById("btnSend").addEventListener("click", async () => {
       try {
+        if (!WEBHOOK_URL || WEBHOOK_URL.includes("PASTE_YOUR")) {
+          setStatus("שים את כתובת הוובהוק בתוך WEBHOOK_URL בקוד.");
+          return;
+        }
+
         updateLabelFromInputs();
         setStatus("מייצר PDF...");
 
         const el = document.getElementById("label");
-        const pdfBlob = await generatePdfBlobFromElement(el);
+        const pdfBase64 = await generatePdfBase64FromElement(el);
 
-        const product = (document.getElementById("nameInput").value || "label")
-          .trim()
-          .replace(/[^\w\u0590-\u05FF\- ]+/g, "")
-          .replace(/\s+/g, "-");
+        const product = safeSlug(document.getElementById("nameInput").value);
+        const fileName = `label-100x100-${product}.pdf`;
 
-        const filename = `label-100x100-${product || "label"}.pdf`;
+        const meta = {
+          product: document.getElementById("nameInput").value,
+          date: document.getElementById("dateInput").value,
+          batch: document.getElementById("batchInput").value,
+          generatedAt: new Date().toISOString()
+        };
 
-        downloadBlob(pdfBlob, filename);
-        setStatus(`ה-PDF נוצר וירד למחשב: ${filename}`);
+        setStatus(
+          "PDF נוצר. שולח לוובהוק (no-cors)...\n" +
+          "שים לב: אין תשובה מהשרת בדפדפן. תבדוק ב-Make אם התקבל (Logger / Create record).\n" +
+          `Base64 length: ${pdfBase64.length}`
+        );
+
+        await sendPdfBase64ToWebhookNoCors(pdfBase64, fileName, meta);
+
+        setStatus(
+          "הבקשה נשלחה מהדפדפן.\n" +
+          "אם במייק לא רואים כלום — זה אומר שהוובהוק לא מקבל text/plain או שהוא חוסם CORS בצורה שמונעת גם את השליחה.\n" +
+          "במקרה כזה חייבים Proxy קטן (Cloudflare Worker / Netlify Function)."
+        );
+      } catch (e) {
+        setStatus("שגיאה:\n" + (e?.message || e));
+      }
+    });
+
+    document.getElementById("btnDownload").addEventListener("click", async () => {
+      try {
+        updateLabelFromInputs();
+        setStatus("מייצר PDF להורדה...");
+
+        const el = document.getElementById("label");
+        const pdfBase64 = await generatePdfBase64FromElement(el);
+
+        const product = safeSlug(document.getElementById("nameInput").value);
+        const fileName = `label-100x100-${product}.pdf`;
+
+        downloadBase64Pdf(pdfBase64, fileName);
+        setStatus(`ה-PDF נוצר וירד למחשב: ${fileName}\nBase64 length: ${pdfBase64.length}`);
       } catch (e) {
         setStatus("שגיאה:\n" + (e?.message || e));
       }
