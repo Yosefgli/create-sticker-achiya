@@ -662,13 +662,6 @@
 
 
     async function runSumCheck(){
-      const barcode = (barcodeInput.value || "").trim();
-      if(!barcode){
-        setStatus("חסר ברקוד", {error:true});
-        barcodeInput.focus();
-        return;
-      }
-
       if(activeAbortController){
         activeAbortController.abort();
       }
@@ -681,7 +674,7 @@
       setStatus("נשלח בדיקת משטחים... ממתין לסטטוס 201", {loading:true});
 
       try{
-        const payload = await pollFor201({ barcode, sum: "check" }, activeAbortController.signal);
+        const payload = await pollFor201({ sum: "check" }, activeAbortController.signal);
         const rows = normalizeSumRows(payload);
         setStatus("");
         openSumModal(rows);
@@ -708,27 +701,6 @@
     searchBtn.addEventListener("click", runSearch);
     sumBtn.addEventListener("click", runSumCheck);
     sumCloseBtn.addEventListener("click", closeSumModal);
-
-    installBtn.addEventListener("click", async () => {
-      if(!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      const choice = await deferredInstallPrompt.userChoice;
-      if(choice?.outcome === "accepted"){
-        deferredInstallPrompt = null;
-        toggleInstallButton(false);
-      }
-    });
-
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredInstallPrompt = e;
-      toggleInstallButton(isMobileDevice() && !isStandalone());
-    });
-
-    window.addEventListener("appinstalled", () => {
-      deferredInstallPrompt = null;
-      toggleInstallButton(false);
-    });
 
     installBtn.addEventListener("click", async () => {
       if(!deferredInstallPrompt) return;
