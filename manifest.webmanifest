@@ -1,0 +1,19 @@
+{
+  "name": "אחיה - חיפוש ברקוד",
+  "short_name": "אחיה",
+  "start_url": "/achiya/",
+  "scope": "/achiya/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "lang": "he",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "image.png",
+      "sizes": "198x198",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
