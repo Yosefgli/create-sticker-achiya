@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="image.png" />
   <title>חיפוש ברקוד → חלונית</title>
 
   <style>
@@ -93,6 +96,13 @@
       border: 1px solid rgba(255,255,255,.12);
       color: var(--text);
     }
+    .btnInstall{
+      background: linear-gradient(135deg, #76f3c7, #6ea8ff);
+      color: #07111f;
+      box-shadow: 0 14px 30px rgba(118,243,199,.2);
+      display:none;
+    }
+    .btnInstall.show{display:inline-block;}
     .btnPrimary[disabled], .btnGhost[disabled]{opacity:.55; cursor:not-allowed}
 
     .status{
@@ -270,7 +280,7 @@
         </div>
       </div>
       <div class="noPrint" style="display:flex; gap:10px; align-items:center;">
-        <span class="pill" title="הקובץ icon.svg צריך להיות באותה תיקייה">icon.svg ✓</span>
+        <span class="pill" title="סמל האפליקציה נטען מהקובץ image.png">image.png ✓</span>
       </div>
     </header>
 
@@ -295,6 +305,7 @@
 
         <button id="searchBtn" class="btnPrimary">חיפוש</button>
         <button id="clearBtn" class="btnGhost">נקה</button>
+        <button id="installBtn" class="btnInstall" aria-label="התקנת אפליקציה">התקנת אפליקציה</button>
       </div>
 
       <div id="status" class="status"></div>
@@ -306,7 +317,7 @@
     <div class="modal">
       <div class="modalTop">
         <div class="modalLogo">
-          <img src="icon.svg" alt="לוגו" onerror="this.style.display='none'">
+          <img src="image.png" alt="לוגו" onerror="this.style.display='none'">
         </div>
         <div id="orderSmall" class="orderSmall"></div>
       </div>
@@ -339,6 +350,7 @@
     const searchBtn    = document.getElementById("searchBtn");
     const clearBtn     = document.getElementById("clearBtn");
     const statusEl     = document.getElementById("status");
+    const installBtn   = document.getElementById("installBtn");
 
     const modalOverlay = document.getElementById("modalOverlay");
     const orderSmallEl = document.getElementById("orderSmall");
@@ -353,6 +365,24 @@
     let keyCount = 0;
 
     let modalCloseTimer = null;
+    let deferredInstallPrompt = null;
+
+    function isMobileDevice(){
+      return window.matchMedia("(max-width: 820px)").matches
+        || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+    }
+
+    function isStandalone(){
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    }
+
+    function toggleInstallButton(shouldShow){
+      if(shouldShow){
+        installBtn.classList.add("show");
+      }else{
+        installBtn.classList.remove("show");
+      }
+    }
 
     function setStatus(text, {loading=false, error=false} = {}){
       statusEl.className = "status" + (error ? " error" : "");
@@ -516,8 +546,38 @@
       }
     }
 
+    async function registerServiceWorker(){
+      if(!("serviceWorker" in navigator)) return;
+      try{
+        await navigator.serviceWorker.register("./sw.js");
+      }catch(err){
+        console.error("Service worker registration failed", err);
+      }
+    }
+
     // === Events ===
     searchBtn.addEventListener("click", runSearch);
+
+    installBtn.addEventListener("click", async () => {
+      if(!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      if(choice?.outcome === "accepted"){
+        deferredInstallPrompt = null;
+        toggleInstallButton(false);
+      }
+    });
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      toggleInstallButton(isMobileDevice() && !isStandalone());
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      toggleInstallButton(false);
+    });
 
     clearBtn.addEventListener("click", () => {
       barcodeInput.value = "";
@@ -554,7 +614,13 @@
       resetTypingProfile();
     });
 
-    window.addEventListener("load", () => barcodeInput.focus());
+    window.addEventListener("load", async () => {
+      barcodeInput.focus();
+      await registerServiceWorker();
+      if(isStandalone() || !isMobileDevice()){
+        toggleInstallButton(false);
+      }
+    });
   </script>
 </body>
 </html>
